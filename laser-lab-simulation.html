@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laser Lab — Aiming with Reflections</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f6f8fa; --panel:#ffffff; --ink:#16222e; --muted:#5b6b7a;
+  --grid:#dde7ef; --axis:#93a6b6; --line:#e3eaf1;
+  --beam:#e02020; --mirror:#2f9bbf; --tool:#6b4fbb; --target:#1b7f5a;
+  --ok:#1b7f5a; --no:#c2452d; --radius:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111a22; --panel:#18242e; --ink:#e8eef3; --muted:#9db0bf;
+    --grid:#26343f; --axis:#4d6373; --line:#26343f;
+    --beam:#ff5a4d; --mirror:#59c2e0; --tool:#a58cf0; --target:#4cc39a;
+    --ok:#4cc39a; --no:#f07a68;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111a22; --panel:#18242e; --ink:#e8eef3; --muted:#9db0bf;
+  --grid:#26343f; --axis:#4d6373; --line:#26343f;
+  --beam:#ff5a4d; --mirror:#59c2e0; --tool:#a58cf0; --target:#4cc39a;
+  --ok:#4cc39a; --no:#f07a68;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:16px;line-height:1.55;font-variant-numeric:tabular-nums}
+.wrap{max-width:1150px;margin:0 auto;padding:20px 18px 60px}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;justify-content:space-between;
+  padding-bottom:14px;border-bottom:2px solid var(--ink)}
+h1{margin:0;font-size:1.4rem;font-weight:600;letter-spacing:-.015em}
+h1 span{color:var(--muted);font-weight:400}
+.namebox{display:flex;gap:9px;align-items:center}
+.namebox select{font:inherit;font-size:.88rem;padding:5px 8px;border:1px solid var(--line);
+  border-radius:8px;background:var(--panel);color:var(--ink)}
+.levels{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0 0}
+.levels button{font:inherit;font-size:.88rem;padding:7px 14px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+.levels button[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.layout{display:grid;grid-template-columns:minmax(340px,1fr) 320px;gap:24px;margin-top:18px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+svg.stage{width:100%;height:auto;display:block;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius)}
+.side>div{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px;margin-bottom:12px}
+h2{font-size:.95rem;font-weight:600;margin:0 0 8px}
+p.brief{margin:0;font-size:.92rem;color:var(--muted)}
+.aim{display:flex;gap:9px;align-items:center;margin:10px 0 6px}
+.aim input[type=number]{font:inherit;width:84px;padding:6px 8px;border:1px solid var(--line);
+  border-radius:8px;background:var(--paper);color:var(--ink);font-size:1rem;font-weight:500}
+.aim input[type=range]{flex:1;accent-color:var(--beam)}
+button.fire{font:inherit;font-weight:600;font-size:.95rem;width:100%;padding:10px;border-radius:8px;
+  border:none;background:var(--beam);color:#fff;cursor:pointer;margin-top:4px}
+button.fire:hover{filter:brightness(1.07)}
+button.ghost{font:inherit;font-size:.85rem;padding:6px 12px;border-radius:8px;cursor:pointer;
+  border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.result{margin-top:10px;font-size:.93rem;font-weight:500;min-height:1.4em}
+.result.ok{color:var(--ok)} .result.no{color:var(--no)}
+table.log{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:4px}
+table.log th{text-align:left;font-weight:500;color:var(--muted);padding:3px 5px;border-bottom:1px solid var(--line)}
+table.log td{padding:3px 5px;border-bottom:1px solid var(--line)}
+.empty{font-size:.85rem;color:var(--muted);margin:6px 0 0}
+details{margin-top:10px}
+summary{cursor:pointer;font-size:.88rem;font-weight:500;color:var(--muted)}
+details p{font-size:.88rem;margin:8px 0 0}
+:focus-visible{outline:2.5px solid var(--tool);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Laser Lab <span>· aiming with reflections</span></h1>
+  <div class="namebox">
+    <label for="units" style="font-size:.85rem;color:var(--muted)">Measure in</label>
+    <select id="units">
+      <option value="in">inches</option>
+      <option value="cm">centimetres</option>
+      <option value="ft">feet</option>
+    </select>
+    <span class="brief" id="scalenote"></span>
+  </div>
+</header>
+
+<div class="levels" id="levels"></div>
+
+<div class="layout">
+  <div>
+    <svg class="stage" id="stage" viewBox="0 0 560 404" role="img"
+         aria-label="Overhead view of the laser station with mirror, barrier and target"></svg>
+    <details>
+      <summary>How the station works</summary>
+      <p>The laser pivots on a fixed pin at <strong>P</strong> and nothing else moves. A barrier blocks
+      the straight path to the target <strong>T</strong>, so the only way to hit it is to bounce the
+      beam off a mirror. Set the angle, fire, and measure the miss. The angle you set is your answer —
+      so work it out before you shoot rather than nudging until it lands.</p>
+    </details>
+  </div>
+
+  <div class="side">
+    <div>
+      <h2 id="ltitle">Level</h2>
+      <p class="brief" id="lbrief"></p>
+      <div class="aim">
+        <input type="number" id="angle" min="0" max="180" step="0.5" value="45" aria-label="Aim angle in degrees">
+        <span style="font-size:1rem;font-weight:500">°</span>
+        <input type="range" id="dial" min="0" max="180" step="0.5" value="45" aria-label="Aim angle dial">
+      </div>
+      <button class="fire" id="fire">Fire the laser</button>
+      <div class="result" id="result"></div>
+      <div class="row">
+        <button class="ghost" id="hint">Show T′</button>
+        <button class="ghost" id="reset">Clear attempts</button>
+      </div>
+    </div>
+
+    <div>
+      <h2>Attempts</h2>
+      <table class="log" id="log"></table>
+      <p class="empty" id="logempty">No shots fired yet.</p>
+    </div>
+
+    <div>
+      <h2>What to record</h2>
+      <p class="brief">Your first-shot angle, whether it hit, and the miss distance in centimetres.
+      A hit on the first shot after constructing T′ is the target result — not a hit after six tries.</p>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+"use strict";
+
+/* ---------- world ---------- */
+const U = 26, OX = 280, OY = 384;
+const px = x => OX + x * U, py = y => OY - y * U;
+const SVG = "http://www.w3.org/2000/svg";
+const el = (t, a) => { const n = document.createElementNS(SVG, t);
+  for (const k in a) n.setAttribute(k, a[k]); return n; };
+
+const LEVELS = [
+  { name: "1 · One bounce",
+    brief: "The barrier blocks the direct shot. Bounce the beam off the mirror to hit T.",
+    P: [-7, 1], T: [6, 2],
+    mirrors: [{ a: [-9, 13], b: [9, 13] }],
+    barriers: [{ a: [0, 0], b: [0, 8] }],
+    order: [0] },
+  { name: "2 · Move the target",
+    brief: "Same mirror, new target. Does your method still work when T moves?",
+    P: [-7, 1], T: [8, 5],
+    mirrors: [{ a: [-9, 13], b: [9, 13] }],
+    barriers: [{ a: [0, 0], b: [0, 9] }],
+    order: [0] },
+  { name: "3 · Move the pivot",
+    brief: "Now the laser starts somewhere else. The mirror and target have not moved.",
+    P: [-8, 6], T: [7, 1],
+    mirrors: [{ a: [-9, 13], b: [9, 13] }],
+    barriers: [{ a: [0, 0], b: [0, 9] }],
+    order: [0] },
+  { name: "4 · Two bounces",
+    brief: "The top mirror is short and the barrier is tall. One bounce cannot reach T — use both mirrors.",
+    P: [-8, 4], T: [7, 4],
+    mirrors: [{ a: [-9, 13], b: [-2, 13] }, { a: [-9, 0], b: [9, 0] }],
+    barriers: [{ a: [0, 1], b: [0, 7] }],
+    order: [0, 1] }
+];
+
+let lvl = 0, shots = [], showHint = false, lastPath = null, lastBounces = [];
+const TOL = 0.4;                        // grid units counted as a hit
+
+const UNITS = {
+  in: { per: 1,   label: "in", dp: 2, note: "1 grid square = 1 inch" },
+  cm: { per: 2.5, label: "cm", dp: 1, note: "1 grid square = 2.5 cm" },
+  ft: { per: 1,   label: "ft", dp: 2, note: "1 grid square = 1 foot" }
+};
+let unit = "in";
+const dist = u => (u * UNITS[unit].per).toFixed(UNITS[unit].dp) + " " + UNITS[unit].label;
+
+/* ---------- vector helpers ---------- */
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+const add = (a, b) => [a[0] + b[0], a[1] + b[1]];
+const mul = (a, k) => [a[0] * k, a[1] * k];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+const len = a => Math.hypot(a[0], a[1]);
+const norm = a => mul(a, 1 / len(a));
+
+function reflectPointOverSegment(p, seg) {
+  const d = norm(sub(seg.b, seg.a));
+  const n = [-d[1], d[0]];
+  const v = sub(p, seg.a);
+  return add(p, mul(n, -2 * dot(v, n)));
+}
+
+/* intersection of ray O+tD with segment AB, returns t or null */
+function hitSeg(O, D, seg) {
+  const [ax, ay] = seg.a, [bx, by] = seg.b;
+  const ex = bx - ax, ey = by - ay;
+  const den = D[0] * ey - D[1] * ex;
+  if (Math.abs(den) < 1e-9) return null;
+  const t = ((ax - O[0]) * ey - (ay - O[1]) * ex) / den;
+  const s = ((ax - O[0]) * D[1] - (ay - O[1]) * D[0]) / den;
+  if (t > 1e-6 && s >= -1e-9 && s <= 1 + 1e-9) return t;
+  return null;
+}
+
+function distPointToSeg(p, a, b) {
+  const ab = sub(b, a), t = Math.max(0, Math.min(1, dot(sub(p, a), ab) / dot(ab, ab)));
+  return len(sub(p, add(a, mul(ab, t))));
+}
+
+/* ---------- trace ---------- */
+function trace(angleDeg) {
+  const L = LEVELS[lvl];
+  const th = angleDeg * Math.PI / 180;
+  let O = L.P.slice(), D = [Math.cos(th), Math.sin(th)];
+  const pts = [O.slice()], bounceInfo = [];
+  let best = Infinity, bounces = 0, stopped = "escaped";
+
+  for (let step = 0; step < 8; step++) {
+    let tBest = Infinity, which = null, kind = null;
+    L.mirrors.forEach((m, i) => { const t = hitSeg(O, D, m);
+      if (t !== null && t < tBest) { tBest = t; which = i; kind = "mirror"; } });
+    L.barriers.forEach((b) => { const t = hitSeg(O, D, b);
+      if (t !== null && t < tBest) { tBest = t; kind = "barrier"; } });
+
+    const far = 40;
+    const end = add(O, mul(D, Math.min(isFinite(tBest) ? tBest : far, far)));
+    best = Math.min(best, distPointToSeg(L.T, O, end));
+    pts.push(end);
+
+    if (kind === "barrier") { stopped = "barrier"; break; }
+    if (kind !== "mirror") { stopped = "escaped"; break; }
+
+    const m = L.mirrors[which];
+    const d = norm(sub(m.b, m.a));
+    let n = [-d[1], d[0]];
+    if (dot(D, n) > 0) n = mul(n, -1);      // normal points back toward the incoming beam
+    const Din = norm(D);
+    const ang = Math.acos(Math.min(1, Math.abs(dot(Din, n)))) * 180 / Math.PI;
+    const Dout = norm(sub(D, mul(n, 2 * dot(D, n))));
+    bounceInfo.push({ p: end, n, din: Din, dout: Dout, ang });
+    D = Dout; O = end; bounces++;
+  }
+  return { pts, miss: best, bounces, stopped, bounceInfo };
+}
+
+/* the angle that works, by the image method */
+function solutionAngle() {
+  const L = LEVELS[lvl];
+  let img = L.T.slice();
+  for (let i = L.order.length - 1; i >= 0; i--) img = reflectPointOverSegment(img, L.mirrors[L.order[i]]);
+  const d = sub(img, L.P);
+  let a = Math.atan2(d[1], d[0]) * 180 / Math.PI;
+  return { angle: (a + 360) % 360, image: img };
+}
+
+/* ---------- draw ---------- */
+const stage = document.getElementById("stage");
+function draw() {
+  const L = LEVELS[lvl];
+  stage.textContent = "";
+
+  /* widen the frame when T′ is showing, so the image point is on screen */
+  let top = 0;
+  if (showHint) {
+    const { image } = solutionAngle();
+    top = Math.min(0, py(image[1]) - 40);
+  }
+  stage.setAttribute("viewBox", `0 ${top} 560 ${404 - top}`);
+
+  const g = document.createDocumentFragment();
+
+  for (let x = -10; x <= 10; x++)
+    g.appendChild(el("line", { x1: px(x), y1: py(0), x2: px(x), y2: py(14),
+      stroke: "var(--grid)", "stroke-width": 1 }));
+  for (let y = 0; y <= 14; y++)
+    g.appendChild(el("line", { x1: px(-10), y1: py(y), x2: px(10), y2: py(y),
+      stroke: "var(--grid)", "stroke-width": 1 }));
+
+  L.barriers.forEach(b => g.appendChild(el("line", {
+    x1: px(b.a[0]), y1: py(b.a[1]), x2: px(b.b[0]), y2: py(b.b[1]),
+    stroke: "var(--muted)", "stroke-width": 9, "stroke-linecap": "round", opacity: .55 })));
+
+  L.mirrors.forEach(m => {
+    g.appendChild(el("line", { x1: px(m.a[0]), y1: py(m.a[1]), x2: px(m.b[0]), y2: py(m.b[1]),
+      stroke: "var(--mirror)", "stroke-width": 6, "stroke-linecap": "round" }));
+    const d = norm(sub(m.b, m.a)), n = [-d[1], d[0]];
+    for (let s = 0.06; s < 1; s += 0.075) {
+      const base = add(m.a, mul(sub(m.b, m.a), s));
+      const tip = add(base, mul(n, -0.42));
+      g.appendChild(el("line", { x1: px(base[0]), y1: py(base[1]), x2: px(tip[0]), y2: py(tip[1]),
+        stroke: "var(--mirror)", "stroke-width": 1.6, opacity: .65 }));
+    }
+  });
+
+  if (showHint) {
+    const { image } = solutionAngle();
+    g.appendChild(el("line", { x1: px(L.P[0]), y1: py(L.P[1]), x2: px(image[0]), y2: py(image[1]),
+      stroke: "var(--tool)", "stroke-width": 1.8, "stroke-dasharray": "6 5" }));
+    g.appendChild(el("line", { x1: px(L.T[0]), y1: py(L.T[1]), x2: px(image[0]), y2: py(image[1]),
+      stroke: "var(--tool)", "stroke-width": 1, "stroke-dasharray": "3 4", opacity: .6 }));
+    g.appendChild(el("circle", { cx: px(image[0]), cy: py(image[1]), r: 5,
+      fill: "none", stroke: "var(--tool)", "stroke-width": 2 }));
+    const t = el("text", { x: px(image[0]) + 9, y: py(image[1]) + 4, "font-size": 13,
+      "font-weight": 600, fill: "var(--tool)" });
+    t.textContent = "T′"; g.appendChild(t);
+  }
+
+  if (lastPath) {
+    for (let i = 0; i < lastPath.length - 1; i++)
+      g.appendChild(el("line", { x1: px(lastPath[i][0]), y1: py(lastPath[i][1]),
+        x2: px(lastPath[i + 1][0]), y2: py(lastPath[i + 1][1]),
+        stroke: "var(--beam)", "stroke-width": 2.4, "stroke-linecap": "round" }));
+    lastPath.slice(1, -1).forEach(p => g.appendChild(el("circle", {
+      cx: px(p[0]), cy: py(p[1]), r: 3.5, fill: "var(--beam)" })));
+  }
+
+  /* angle of incidence and reflection, drawn at each bounce */
+  lastBounces.forEach(b => {
+    const nEnd = add(b.p, mul(b.n, 2.1));
+    g.appendChild(el("line", { x1: px(b.p[0]), y1: py(b.p[1]), x2: px(nEnd[0]), y2: py(nEnd[1]),
+      stroke: "var(--ink)", "stroke-width": 1.4, "stroke-dasharray": "5 4", opacity: .75 }));
+
+    const back = mul(b.din, -1);
+    const arc = (from, to, r) => {
+      const a0 = Math.atan2(from[1], from[0]), a1raw = Math.atan2(to[1], to[0]);
+      let d = a1raw - a0;
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      const pts = [];
+      for (let i = 0; i <= 16; i++) {
+        const a = a0 + d * (i / 16);
+        pts.push(`${px(b.p[0] + Math.cos(a) * r)},${py(b.p[1] + Math.sin(a) * r)}`);
+      }
+      g.appendChild(el("polyline", { points: pts.join(" "), fill: "none",
+        stroke: "var(--ink)", "stroke-width": 1.5, opacity: .85 }));
+      const am = a0 + d / 2;
+      return [b.p[0] + Math.cos(am) * (r + 0.62), b.p[1] + Math.sin(am) * (r + 0.62)];
+    };
+
+    const l1 = arc(back, b.n, 1.0);
+    const l2 = arc(b.n, b.dout, 1.35);
+    [[l1, b.ang], [l2, b.ang]].forEach(([pos, val]) => {
+      const t = el("text", { x: px(pos[0]), y: py(pos[1]) + 4, "font-size": 12,
+        "font-weight": 600, fill: "var(--ink)", "text-anchor": "middle" });
+      t.textContent = val.toFixed(1) + "°";
+      const bg = el("rect", { x: px(pos[0]) - 20, y: py(pos[1]) - 9, width: 40, height: 17,
+        rx: 4, fill: "var(--panel)", opacity: .88 });
+      g.appendChild(bg); g.appendChild(t);
+    });
+  });
+
+  g.appendChild(el("circle", { cx: px(L.T[0]), cy: py(L.T[1]), r: 9,
+    fill: "none", stroke: "var(--target)", "stroke-width": 2.5 }));
+  g.appendChild(el("circle", { cx: px(L.T[0]), cy: py(L.T[1]), r: 3, fill: "var(--target)" }));
+  const tt = el("text", { x: px(L.T[0]) + 13, y: py(L.T[1]) + 5, "font-size": 13,
+    "font-weight": 600, fill: "var(--target)" }); tt.textContent = "T"; g.appendChild(tt);
+
+  /* the laser, with its angle shown live */
+  const angDeg = +document.getElementById("angle").value;
+  const ang = angDeg * Math.PI / 180;
+  const dirs = [Math.cos(ang), Math.sin(ang)];
+
+  const base = add(L.P, [2.0, 0]);
+  g.appendChild(el("line", { x1: px(L.P[0]), y1: py(L.P[1]), x2: px(base[0]), y2: py(base[1]),
+    stroke: "var(--axis)", "stroke-width": 1.2, "stroke-dasharray": "4 4" }));
+
+  const aim = add(L.P, mul(dirs, 3.4));
+  g.appendChild(el("line", { x1: px(L.P[0]), y1: py(L.P[1]), x2: px(aim[0]), y2: py(aim[1]),
+    stroke: "var(--beam)", "stroke-width": 1.2, "stroke-dasharray": "2 5", opacity: .65 }));
+
+  const ra = 1.35, steps = 20, arcPts = [];
+  for (let i = 0; i <= steps; i++) {
+    const a = ang * (i / steps);
+    arcPts.push(`${px(L.P[0] + Math.cos(a) * ra)},${py(L.P[1] + Math.sin(a) * ra)}`);
+  }
+  g.appendChild(el("polyline", { points: arcPts.join(" "), fill: "none",
+    stroke: "var(--beam)", "stroke-width": 1.8, opacity: .9 }));
+
+  const lp = [L.P[0] + Math.cos(ang / 2) * (ra + 0.78), L.P[1] + Math.sin(ang / 2) * (ra + 0.78)];
+  g.appendChild(el("rect", { x: px(lp[0]) - 25, y: py(lp[1]) - 11, width: 50, height: 21,
+    rx: 5, fill: "var(--panel)", stroke: "var(--beam)", "stroke-width": 1.2, opacity: .95 }));
+  const at = el("text", { x: px(lp[0]), y: py(lp[1]) + 5, "font-size": 13, "font-weight": 600,
+    fill: "var(--beam)", "text-anchor": "middle" });
+  at.textContent = angDeg.toFixed(1) + "°";
+  g.appendChild(at);
+
+  const tip = add(L.P, mul(dirs, 1.5));
+  g.appendChild(el("line", { x1: px(L.P[0]), y1: py(L.P[1]), x2: px(tip[0]), y2: py(tip[1]),
+    stroke: "var(--ink)", "stroke-width": 6, "stroke-linecap": "round" }));
+  g.appendChild(el("circle", { cx: px(L.P[0]), cy: py(L.P[1]), r: 6, fill: "var(--ink)" }));
+  const pt = el("text", { x: px(L.P[0]) - 16, y: py(L.P[1]) + 5, "font-size": 13,
+    "font-weight": 600, fill: "var(--ink)" }); pt.textContent = "P"; g.appendChild(pt);
+
+  stage.appendChild(g);
+}
+
+/* ---------- interaction ---------- */
+const angleIn = document.getElementById("angle"), dial = document.getElementById("dial");
+const sync = (v) => { angleIn.value = v; dial.value = v; draw(); };
+angleIn.addEventListener("input", () => sync(angleIn.value));
+dial.addEventListener("input", () => sync(dial.value));
+
+document.getElementById("fire").onclick = () => {
+  const a = +angleIn.value;
+  const r = trace(a);
+  lastPath = r.pts; lastBounces = r.bounceInfo;
+  const res = document.getElementById("result");
+  const hit = r.miss <= TOL && r.bounces > 0;
+  if (hit) {
+    res.className = "result ok";
+    res.textContent = `Hit, in ${r.bounces} bounce${r.bounces > 1 ? "s" : ""}.`;
+  } else if (r.stopped === "barrier") {
+    res.className = "result no";
+    res.textContent = "The beam stopped at the barrier. Aim toward a mirror instead.";
+  } else {
+    res.className = "result no";
+    res.textContent = `Missed by ${dist(r.miss)} after ${r.bounces} bounce${r.bounces === 1 ? "" : "s"}.`;
+  }
+  shots.push({ a, miss: r.miss, hit, b: r.bounces });
+  renderLog(); draw();
+};
+
+document.getElementById("units").addEventListener("change", (e) => {
+  unit = e.target.value;
+  document.getElementById("scalenote").textContent = UNITS[unit].note;
+  renderLog();
+  const res = document.getElementById("result");
+  if (shots.length) {
+    const last = shots[shots.length - 1];
+    if (!last.hit && last.b > 0) res.textContent =
+      `Missed by ${dist(last.miss)} after ${last.b} bounce${last.b === 1 ? "" : "s"}.`;
+  }
+});
+
+document.getElementById("hint").onclick = (e) => {
+  showHint = !showHint;
+  e.target.textContent = showHint ? "Hide T′" : "Show T′";
+  draw();
+};
+document.getElementById("reset").onclick = () => {
+  shots = []; lastPath = null; lastBounces = [];
+  document.getElementById("result").textContent = "";
+  renderLog(); draw();
+};
+
+function renderLog() {
+  const t = document.getElementById("log"), empty = document.getElementById("logempty");
+  if (!shots.length) { t.innerHTML = ""; empty.style.display = "block"; return; }
+  empty.style.display = "none";
+  let h = "<tr><th>#</th><th>Angle</th><th>Result</th></tr>";
+  shots.forEach((s, i) => {
+    h += `<tr><td>${i + 1}</td><td>${s.a.toFixed(1)}°</td><td>${
+      s.hit ? "<span style='color:var(--ok);font-weight:500'>hit</span>"
+            : "off by " + dist(s.miss)}</td></tr>`;
+  });
+  t.innerHTML = h;
+}
+
+function buildLevels() {
+  const host = document.getElementById("levels");
+  LEVELS.forEach((L, i) => {
+    const b = document.createElement("button");
+    b.textContent = L.name; b.setAttribute("aria-pressed", i === lvl);
+    b.onclick = () => {
+      lvl = i; shots = []; lastPath = null; lastBounces = []; showHint = false;
+      document.getElementById("hint").textContent = "Show T′";
+      document.getElementById("result").textContent = "";
+      host.querySelectorAll("button").forEach((x, j) => x.setAttribute("aria-pressed", j === i));
+      setLevelText(); renderLog(); draw();
+    };
+    host.appendChild(b);
+  });
+}
+function setLevelText() {
+  document.getElementById("ltitle").textContent = LEVELS[lvl].name;
+  document.getElementById("lbrief").textContent = LEVELS[lvl].brief;
+}
+
+document.getElementById("scalenote").textContent = UNITS[unit].note;
+buildLevels(); setLevelText(); renderLog(); draw();
+</script>
+</body>
+</html>
